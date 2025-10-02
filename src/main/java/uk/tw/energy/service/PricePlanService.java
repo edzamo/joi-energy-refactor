@@ -10,9 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
-
 import org.springframework.stereotype.Service;
-
 import uk.tw.energy.domain.ElectricityReading;
 import uk.tw.energy.domain.PricePlan;
 
@@ -85,8 +83,8 @@ public class PricePlanService {
             return BigDecimal.ZERO;
         }
         // 2. Convierte la diferencia de tiempo a horas.
-        BigDecimal timeDifferenceInHours = BigDecimal.valueOf(timeDifferenceInSeconds)
-                .divide(BigDecimal.valueOf(3600), 10, RoundingMode.HALF_UP);
+        BigDecimal timeDifferenceInHours =
+                BigDecimal.valueOf(timeDifferenceInSeconds).divide(BigDecimal.valueOf(3600), 10, RoundingMode.HALF_UP);
 
         // 3. Obtiene el día de la semana para verificar si aplican precios de horas punta (peak).
         DayOfWeek dayOfWeek =
@@ -97,7 +95,10 @@ public class PricePlanService {
         BigDecimal effectivePrice = pricePlan.unitRate().multiply(multiplier);
 
         // 6. Calcula la potencia promedio en el intervalo (promedio de las dos lecturas).
-        BigDecimal averagePower = currentReading.reading().add(nextReading.reading()).divide(BigDecimal.valueOf(2), 10, RoundingMode.HALF_UP);
+        BigDecimal averagePower = currentReading
+                .reading()
+                .add(nextReading.reading())
+                .divide(BigDecimal.valueOf(2), 10, RoundingMode.HALF_UP);
         // 7. Calcula la energía consumida en kWh (Potencia en kW * Tiempo en h).
         BigDecimal consumption = averagePower.multiply(timeDifferenceInHours);
         // 8. Devuelve el coste final para este intervalo (consumo * precio efectivo).
