@@ -13,7 +13,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import uk.tw.energy.domain.ElectricityReading;
+import uk.tw.energy.domain.EnergyType;
 import uk.tw.energy.domain.PricePlan;
+import uk.tw.energy.domain.Tariff;
 import uk.tw.energy.service.AccountService;
 import uk.tw.energy.service.MeterReadingService;
 import uk.tw.energy.service.PricePlanService;
@@ -31,9 +33,17 @@ public class PricePlanComparatorControllerTest {
     public void setUp() {
         meterReadingService = new MeterReadingService(new HashMap<>());
 
-        PricePlan pricePlan1 = new PricePlan(WORST_PLAN_ID, null, BigDecimal.TEN, null);
-        PricePlan pricePlan2 = new PricePlan(BEST_PLAN_ID, null, BigDecimal.ONE, null);
-        PricePlan pricePlan3 = new PricePlan(SECOND_BEST_PLAN_ID, null, BigDecimal.valueOf(2), null);
+        PricePlan pricePlan1 = new PricePlan(
+                WORST_PLAN_ID, "Worst Supplier", List.of(new Tariff(EnergyType.ELECTRICITY, BigDecimal.TEN)));
+
+        PricePlan pricePlan2 = new PricePlan(
+                BEST_PLAN_ID, "Best Supplier", List.of(new Tariff(EnergyType.ELECTRICITY, BigDecimal.ONE)));
+
+        PricePlan pricePlan3 = new PricePlan(
+                SECOND_BEST_PLAN_ID,
+                "Second Best Supplier",
+                List.of(new Tariff(EnergyType.ELECTRICITY, BigDecimal.valueOf(2))));
+
         List<PricePlan> pricePlans = List.of(pricePlan1, pricePlan2, pricePlan3);
         PricePlanService pricePlanService = new PricePlanService(pricePlans, meterReadingService);
 
