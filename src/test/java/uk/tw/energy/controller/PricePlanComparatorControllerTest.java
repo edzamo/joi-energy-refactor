@@ -56,9 +56,9 @@ public class PricePlanComparatorControllerTest {
                 WORST_PLAN_ID,
                 PricePlanComparatorController.PRICE_PLAN_COMPARISONS_KEY,
                 Map.of(
-                        WORST_PLAN_ID, BigDecimal.valueOf(100.0),
-                        BEST_PLAN_ID, BigDecimal.valueOf(10.0),
-                        SECOND_BEST_PLAN_ID, BigDecimal.valueOf(20.0)));
+                        WORST_PLAN_ID, new BigDecimal("100.00"),
+                        BEST_PLAN_ID, new BigDecimal("10.00"),
+                        SECOND_BEST_PLAN_ID, new BigDecimal("20.00")));
         assertThat(response.getBody()).isEqualTo(expected);
     }
 
@@ -80,9 +80,9 @@ public class PricePlanComparatorControllerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         var expectedPricePlanToCost = List.of(
-                new AbstractMap.SimpleEntry<>(BEST_PLAN_ID, BigDecimal.valueOf(38.0)),
-                new AbstractMap.SimpleEntry<>(SECOND_BEST_PLAN_ID, BigDecimal.valueOf(76.0)),
-                new AbstractMap.SimpleEntry<>(WORST_PLAN_ID, BigDecimal.valueOf(380.0)));
+                new AbstractMap.SimpleEntry<>(BEST_PLAN_ID, new BigDecimal("9.50")),
+                new AbstractMap.SimpleEntry<>(SECOND_BEST_PLAN_ID, new BigDecimal("19.00")),
+                new AbstractMap.SimpleEntry<>(WORST_PLAN_ID, new BigDecimal("95.00")));
         assertThat(response.getBody()).isEqualTo(expectedPricePlanToCost);
     }
 
@@ -96,8 +96,8 @@ public class PricePlanComparatorControllerTest {
                 controller.recommendCheapestPricePlans(SMART_METER_ID, 2);
 
         var expectedPricePlanToCost = List.of(
-                new AbstractMap.SimpleEntry<>(BEST_PLAN_ID, BigDecimal.valueOf(16.7)),
-                new AbstractMap.SimpleEntry<>(SECOND_BEST_PLAN_ID, BigDecimal.valueOf(33.4)));
+                new AbstractMap.SimpleEntry<>(BEST_PLAN_ID, BigDecimal.valueOf(9.38)),
+                new AbstractMap.SimpleEntry<>(SECOND_BEST_PLAN_ID, BigDecimal.valueOf(18.75)));
         assertThat(response.getBody()).isEqualTo(expectedPricePlanToCost);
     }
 
@@ -111,9 +111,9 @@ public class PricePlanComparatorControllerTest {
                 controller.recommendCheapestPricePlans(SMART_METER_ID, 5);
 
         var expectedPricePlanToCost = List.of(
-                new AbstractMap.SimpleEntry<>(BEST_PLAN_ID, BigDecimal.valueOf(14.0)),
-                new AbstractMap.SimpleEntry<>(SECOND_BEST_PLAN_ID, BigDecimal.valueOf(28.0)),
-                new AbstractMap.SimpleEntry<>(WORST_PLAN_ID, BigDecimal.valueOf(140.0)));
+                new AbstractMap.SimpleEntry<>(BEST_PLAN_ID, new BigDecimal("14.00")),
+                new AbstractMap.SimpleEntry<>(SECOND_BEST_PLAN_ID, new BigDecimal("28.00")),
+                new AbstractMap.SimpleEntry<>(WORST_PLAN_ID, new BigDecimal("140.00")));
         assertThat(response.getBody()).isEqualTo(expectedPricePlanToCost);
     }
 }

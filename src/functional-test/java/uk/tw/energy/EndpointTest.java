@@ -73,9 +73,14 @@ public class EndpointTest {
                 restTemplate.getForEntity("/price-plans/compare-all/" + smartMeterId, CompareAllResponse.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody())
-                .isEqualTo(new CompareAllResponse(
-                        Map.of("price-plan-0", 36000, "price-plan-1", 7200, "price-plan-2", 3600), null));
+
+        CompareAllResponse responseBody = response.getBody();
+        assertThat(responseBody.pricePlanId()).isNull();
+        assertThat(responseBody.pricePlanComparisons())
+                .hasSize(3)
+                .containsEntry("price-plan-0", 1)
+                .containsEntry("price-plan-1", 0)
+                .containsEntry("price-plan-2", 0);
     }
 
     @SuppressWarnings("rawtypes")
@@ -91,7 +96,7 @@ public class EndpointTest {
         ResponseEntity<Map[]> response =
                 restTemplate.getForEntity("/price-plans/recommend/" + smartMeterId + "?limit=2", Map[].class);
 
-        assertThat(response.getBody()).containsExactly(Map.of("price-plan-2", 3600), Map.of("price-plan-1", 7200));
+        assertThat(response.getBody()).containsExactly(Map.of("price-plan-2", 0.11), Map.of("price-plan-1", 0.22));
     }
 
     private void populateReadingsForMeter(String smartMeterId, List<ElectricityReading> data) {
