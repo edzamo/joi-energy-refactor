@@ -1,12 +1,13 @@
 package uk.tw.energy;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -16,6 +17,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+
 import uk.tw.energy.builders.MeterReadingsBuilder;
 import uk.tw.energy.domain.ElectricityReading;
 import uk.tw.energy.domain.MeterReadings;
@@ -61,7 +63,7 @@ public class EndpointTest {
     }
 
     @Test
-    public void shouldCalculateAllPrices() {
+    void shouldCalculateAllPrices() {
         String smartMeterId = "bob";
         List<ElectricityReading> data = List.of(
                 new ElectricityReading(Instant.parse("2024-04-26T00:00:10.00Z"), new BigDecimal(10)),
@@ -78,14 +80,14 @@ public class EndpointTest {
         assertThat(responseBody.pricePlanId()).isNull();
         assertThat(responseBody.pricePlanComparisons())
                 .hasSize(3)
-                .containsEntry("price-plan-0", 1)
-                .containsEntry("price-plan-1", 0)
-                .containsEntry("price-plan-2", 0);
+                .containsEntry("price-plan-0", 1.11)
+                .containsEntry("price-plan-1", 0.22)
+                .containsEntry("price-plan-2", 0.11);
     }
 
     @SuppressWarnings("rawtypes")
     @Test
-    public void givenMeterIdAndLimitShouldReturnRecommendedCheapestPricePlans() {
+    void givenMeterIdAndLimitShouldReturnRecommendedCheapestPricePlans() {
         String smartMeterId = "jane";
         List<ElectricityReading> data = List.of(
                 new ElectricityReading(Instant.parse("2024-04-26T00:00:10.00Z"), new BigDecimal(10)),
@@ -99,6 +101,33 @@ public class EndpointTest {
         assertThat(response.getBody()).containsExactly(Map.of("price-plan-2", 0.11), Map.of("price-plan-1", 0.22));
     }
 
+    @Test
+    void shouldCalculateHigherPriceForPeakTime() {
+        String smartMeterId = "peak-user";
+        // Saturday, April 27, 2024 - A day with peak time pricing for price-plan-0
+        List<ElectricityReading> data = List.of(
+                new ElectricityReading(Instant.parse("2024-04-27T10:00:00.00Z"), BigDecimal.valueOf(0.5)),
+                new ElectricityReading(Instant.parse("2024-04-27T10:30:00.00Z"), BigDecimal.valueOf(0.5)));
+
+        // Store the readings via the API
+        MeterReadings readings = new MeterReadings(smartMeterId, data);
+        HttpEntity<MeterReadings> entity = toHttpEntity(readings);
+        restTemplate.postForEntity("/readings/store", entity, String.class);
+
+        ResponseEntity<CompareAllResponse> response =
+                restTemplate.getForEntity("/price-plans/compare-all/" + smartMeterId, CompareAllResponse.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        CompareAllResponse responseBody = response.getBody();
+        // price-plan-0 (Dr Evil) has a unit rate of 10 and a 2x multiplier on Saturday
+        // Average power: (0.5 + 0.5) / 2 = 0.5 kW
+        // Time difference: 0.5 hours
+        // Consumption: 0.5 kW * 0.5 h = 0.25 kWh
+        // Cost: 0.25 kWh * (10 * 2) = 5.00
+        assertThat(responseBody.pricePlanComparisons().get("price-plan-0")).isCloseTo(5.00, within(0.01));
+    }
+
     private void populateReadingsForMeter(String smartMeterId, List<ElectricityReading> data) {
         MeterReadings readings = new MeterReadings(smartMeterId, data);
 
@@ -106,5 +135,5 @@ public class EndpointTest {
         restTemplate.postForEntity("/readings/store", entity, String.class);
     }
 
-    record CompareAllResponse(Map<String, Integer> pricePlanComparisons, String pricePlanId) {}
+    record CompareAllResponse(Map<String, Double> pricePlanComparisons, String pricePlanId) {}
 }

@@ -1,9 +1,12 @@
 package uk.tw.energy.controller;
 
+import static java.util.Collections.emptyMap;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.AbstractMap;
 import java.util.HashMap;
 import java.util.List;
@@ -18,7 +21,7 @@ import uk.tw.energy.service.AccountService;
 import uk.tw.energy.service.MeterReadingService;
 import uk.tw.energy.service.PricePlanService;
 
-public class PricePlanComparatorControllerTest {
+class PricePlanComparatorControllerTest {
     private static final String WORST_PLAN_ID = "worst-supplier";
     private static final String BEST_PLAN_ID = "best-supplier";
     private static final String SECOND_BEST_PLAN_ID = "second-best-supplier";
@@ -28,12 +31,22 @@ public class PricePlanComparatorControllerTest {
     private AccountService accountService;
 
     @BeforeEach
-    public void setUp() {
+    void setUp() {
         meterReadingService = new MeterReadingService(new HashMap<>());
 
-        PricePlan pricePlan1 = new PricePlan(WORST_PLAN_ID, null, BigDecimal.TEN, null);
-        PricePlan pricePlan2 = new PricePlan(BEST_PLAN_ID, null, BigDecimal.ONE, null);
-        PricePlan pricePlan3 = new PricePlan(SECOND_BEST_PLAN_ID, null, BigDecimal.valueOf(2), null);
+        Map<DayOfWeek, BigDecimal> worstSupplierPeak = Map.of(
+                DayOfWeek.SATURDAY, new BigDecimal("1.5"),
+                DayOfWeek.SUNDAY, new BigDecimal("1.5"));
+        Map<DayOfWeek, BigDecimal> secondBestSupplierPeak = Map.of(
+                DayOfWeek.MONDAY, new BigDecimal("1.2"),
+                DayOfWeek.TUESDAY, new BigDecimal("1.2"),
+                DayOfWeek.WEDNESDAY, new BigDecimal("1.2"),
+                DayOfWeek.THURSDAY, new BigDecimal("1.2"),
+                DayOfWeek.FRIDAY, new BigDecimal("1.2"));
+        PricePlan pricePlan1 = new PricePlan(WORST_PLAN_ID, "Worst Supplier", BigDecimal.TEN, worstSupplierPeak);
+        PricePlan pricePlan2 = new PricePlan(BEST_PLAN_ID, "Best Supplier", BigDecimal.ONE, emptyMap());
+        PricePlan pricePlan3 = new PricePlan(
+                SECOND_BEST_PLAN_ID, "Second Best Supplier", BigDecimal.valueOf(2), secondBestSupplierPeak);
         List<PricePlan> pricePlans = List.of(pricePlan1, pricePlan2, pricePlan3);
         PricePlanService pricePlanService = new PricePlanService(pricePlans, meterReadingService);
 
@@ -43,22 +56,42 @@ public class PricePlanComparatorControllerTest {
     }
 
     @Test
-    public void calculatedCostForEachPricePlan_happyPath() {
-        var electricityReading = new ElectricityReading(Instant.now().minusSeconds(3600), BigDecimal.valueOf(15.0));
+    void calculatedCostForEachPricePlan_happyPath() {
+        // Arrange
+        var readingTime = Instant.now().minusSeconds(3600);
+        var electricityReading = new ElectricityReading(readingTime, BigDecimal.valueOf(15.0));
         var otherReading = new ElectricityReading(Instant.now(), BigDecimal.valueOf(5.0));
         meterReadingService.storeReadings(SMART_METER_ID, List.of(electricityReading, otherReading));
 
+        // Act
         ResponseEntity<Map<String, Object>> response = controller.calculatedCostForEachPricePlan(SMART_METER_ID);
 
+        // Assert
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        // Calculate expected costs dynamically to make the test robust against day-of-week changes
+        DayOfWeek day = readingTime.atZone(ZoneId.systemDefault()).getDayOfWeek();
+        BigDecimal consumption = BigDecimal.valueOf(10.0); // (15+5)/2 * 1 hour
+
+        BigDecimal worstPlanCost = day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY
+                ? new BigDecimal("150.00")
+                : new BigDecimal("100.00");
+        BigDecimal bestPlanCost = new BigDecimal("10.00");
+        BigDecimal secondBestPlanCost = day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY
+                ? new BigDecimal("20.00")
+                : new BigDecimal("24.00");
+
         Map<String, Object> expected = Map.of(
                 PricePlanComparatorController.PRICE_PLAN_ID_KEY,
                 WORST_PLAN_ID,
                 PricePlanComparatorController.PRICE_PLAN_COMPARISONS_KEY,
                 Map.of(
-                        WORST_PLAN_ID, new BigDecimal("100.00"),
-                        BEST_PLAN_ID, new BigDecimal("10.00"),
-                        SECOND_BEST_PLAN_ID, new BigDecimal("20.00")));
+                        WORST_PLAN_ID,
+                        worstPlanCost,
+                        BEST_PLAN_ID,
+                        bestPlanCost,
+                        SECOND_BEST_PLAN_ID,
+                        secondBestPlanCost));
         assertThat(response.getBody()).isEqualTo(expected);
     }
 
@@ -70,7 +103,7 @@ public class PricePlanComparatorControllerTest {
     }
 
     @Test
-    public void recommendCheapestPricePlans_noLimit() {
+    void recommendCheapestPricePlans_noLimit() {
         var electricityReading = new ElectricityReading(Instant.now().minusSeconds(1800), BigDecimal.valueOf(35.0));
         var otherReading = new ElectricityReading(Instant.now(), BigDecimal.valueOf(3.0));
         meterReadingService.storeReadings(SMART_METER_ID, List.of(electricityReading, otherReading));
@@ -81,13 +114,13 @@ public class PricePlanComparatorControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         var expectedPricePlanToCost = List.of(
                 new AbstractMap.SimpleEntry<>(BEST_PLAN_ID, new BigDecimal("9.50")),
-                new AbstractMap.SimpleEntry<>(SECOND_BEST_PLAN_ID, new BigDecimal("19.00")),
+                new AbstractMap.SimpleEntry<>(SECOND_BEST_PLAN_ID, new BigDecimal("22.80")),
                 new AbstractMap.SimpleEntry<>(WORST_PLAN_ID, new BigDecimal("95.00")));
         assertThat(response.getBody()).isEqualTo(expectedPricePlanToCost);
     }
 
     @Test
-    public void recommendCheapestPricePlans_withLimit() {
+    void recommendCheapestPricePlans_withLimit() {
         var electricityReading = new ElectricityReading(Instant.now().minusSeconds(2700), BigDecimal.valueOf(5.0));
         var otherReading = new ElectricityReading(Instant.now(), BigDecimal.valueOf(20.0));
         meterReadingService.storeReadings(SMART_METER_ID, List.of(electricityReading, otherReading));
@@ -96,13 +129,13 @@ public class PricePlanComparatorControllerTest {
                 controller.recommendCheapestPricePlans(SMART_METER_ID, 2);
 
         var expectedPricePlanToCost = List.of(
-                new AbstractMap.SimpleEntry<>(BEST_PLAN_ID, BigDecimal.valueOf(9.38)),
-                new AbstractMap.SimpleEntry<>(SECOND_BEST_PLAN_ID, BigDecimal.valueOf(18.75)));
+                new AbstractMap.SimpleEntry<>(BEST_PLAN_ID, new BigDecimal("9.38")),
+                new AbstractMap.SimpleEntry<>(SECOND_BEST_PLAN_ID, new BigDecimal("22.50")));
         assertThat(response.getBody()).isEqualTo(expectedPricePlanToCost);
     }
 
     @Test
-    public void recommendCheapestPricePlans_limitHigherThanNumberOfEntries() {
+    void recommendCheapestPricePlans_limitHigherThanNumberOfEntries() {
         var reading0 = new ElectricityReading(Instant.now().minusSeconds(3600), BigDecimal.valueOf(25.0));
         var reading1 = new ElectricityReading(Instant.now(), BigDecimal.valueOf(3.0));
         meterReadingService.storeReadings(SMART_METER_ID, List.of(reading0, reading1));
@@ -112,7 +145,7 @@ public class PricePlanComparatorControllerTest {
 
         var expectedPricePlanToCost = List.of(
                 new AbstractMap.SimpleEntry<>(BEST_PLAN_ID, new BigDecimal("14.00")),
-                new AbstractMap.SimpleEntry<>(SECOND_BEST_PLAN_ID, new BigDecimal("28.00")),
+                new AbstractMap.SimpleEntry<>(SECOND_BEST_PLAN_ID, new BigDecimal("33.60")),
                 new AbstractMap.SimpleEntry<>(WORST_PLAN_ID, new BigDecimal("140.00")));
         assertThat(response.getBody()).isEqualTo(expectedPricePlanToCost);
     }
